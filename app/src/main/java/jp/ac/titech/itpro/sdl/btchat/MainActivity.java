@@ -276,63 +276,60 @@ public class MainActivity extends AppCompatActivity {
                 setState(State.Disconnected);
         }
     }
-// SOLVEボタンを押した時の挙動
-    public void onClickSolveButton(View v) {
-        final long clicktime = System.currentTimeMillis();
-        Log.d(TAG, "onClickSolveButton");
+    //問題を解く流れ
+    public void solvequestion(long time, Question q){
         final EditText editView = new EditText(MainActivity.this);
-        final Question q = new Question();
-        final Question qmat = q.MakeQuestion();
+        final Question qmat = q;
+        final long appeartime = time;
         new AlertDialog.Builder(MainActivity.this)
                 .setIcon(android.R.drawable.ic_dialog_info)
-                .setTitle("問題: " + qmat.qs + " ?")
+                .setTitle(qmat.qtitle + qmat.qs + " ?")
                 .setView(editView)
                 .setPositiveButton("OK", new DialogInterface.OnClickListener() {
                     public void onClick(DialogInterface dialog, int whichButton) {
                         long solvetime = System.currentTimeMillis();
-                        long duration = solvetime-clicktime;
+                        long duration = solvetime - appeartime;
                         int moves = 0;
-                        boolean correct;
                         boolean goal = false;
                         int answer = 0;
-                        if(editView.getText().toString().length() != 0 ){
-                            try{
+                        String content;
+                        if (editView.getText().toString().length() != 0) {
+                            try {
                                 answer = Integer.parseInt(editView.getText().toString());
-                            }
-                            catch(NumberFormatException e){
+                            } catch (NumberFormatException e) {
                                 answer = 0;
                             }
                         }
-                        if (answer == qmat.answer) {
-                            correct = true;
-                            moves = calculatemoves(answer, duration);
+                        if (answer == qmat.answer && duration <= qmat.accepttime) {
+                            moves = calculatemoves(qmat.qid, answer, duration);
                             Sugoroku.totalmoves += moves;
-                            if (Sugoroku.totalmoves >= Sugoroku.n_goal){
+                            if (Sugoroku.totalmoves >= Sugoroku.n_goal) {
                                 goal = true;
                                 Toast.makeText(MainActivity.this,
                                         "ゴール!おめでとう!",
                                         Toast.LENGTH_LONG).show();
-                            }
-                            else{
+                            } else {
                                 Toast.makeText(MainActivity.this,
                                         "正解!",
                                         Toast.LENGTH_LONG).show();
-
                             }
-                        } else {
-                            correct = false;
+                            content = String.format("%s - 正解!" + "\n" +
+                                            "%s %d(in %2ds), %dマス進みます",
+                                    devName.substring(0, 4), qmat.qs, qmat.answer, duration / 1000, moves);
+                        } else if (answer == qmat.answer){
+                            Toast.makeText(MainActivity.this,
+                                    "タイムオーバー",
+                                    Toast.LENGTH_LONG).show();
+                            content = String.format("%s - タイムオーバーです" + "\n" +
+                                            "%s %d(in %2ds)",
+                                    devName.substring(0, 4), qmat.qs, qmat.answer, duration / 1000);
+
+                        } else{
                             Toast.makeText(MainActivity.this,
                                     "不正解!",
                                     Toast.LENGTH_LONG).show();
-                    }
-                        String content;
-                        if (!correct){
                             content = String.format("%s - 不正解!" + "\n" +
-                                            "%s %d", devName.substring(0,4),qmat.qs, qmat.answer);
-                        } else {
-                            content = String.format("%s - 正解!" + "\n" +
-                                            "%s %d(in %2ds), %dマス進みます",
-                                    devName.substring(0,4), qmat.qs, qmat.answer, duration/1000, moves);
+                                    "%s %d", devName.substring(0,4),qmat.qs, qmat.answer);
                         }
                         ChatMessage message = new ChatMessage(message_seq, solvetime, content, devName);
                         commThread.send(message);
@@ -351,24 +348,30 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
                 })
-                .setNegativeButton("キャンセル", new DialogInterface.OnClickListener() {
-                    public void onClick(DialogInterface dialog, int whichButton) {
-                        long solvetime = System.currentTimeMillis();
-                        Toast.makeText(MainActivity.this,
-                                "Never give up",
-                                Toast.LENGTH_LONG).show();
-                        String content = String.format("%s - 不正解!" + "\n" +
-                                                "%s %d", devName.substring(0,4),qmat.qs, qmat.answer);
-                        ChatMessage message = new ChatMessage(message_seq, solvetime, content, devName);
-                        commThread.send(message);
-                        chatLogAdapter.add(message);
-                        chatLogAdapter.notifyDataSetChanged();
-                        chatLogView.smoothScrollToPosition(chatLog.size());
-                        setState(State.notMyTURN);
-                    }
-                })
                 .show();
-
+    }
+    //SOLVEボタンを押した時の挙動
+    public void onClickSolveButton(View v) {
+        final long clicktime = System.currentTimeMillis();
+        Log.d(TAG, "onClickSolveButton");
+        final Question q = new Question();
+        final Question qmat = q.MakeQuestion();
+        solvequestion(clicktime, qmat);
+        int eventer = Event.Eventchecker(Sugoroku.totalmoves);
+        if (eventer == 1){
+            final long occurtime = System.currentTimeMillis();
+            final Question spq1 = new Question();
+            final Question spq1mat = spq1.MakeQuestionSP1();
+            solvequestion(occurtime, spq1mat);
+            setState(State.notMyTURN);
+        }
+        else if (eventer == 2){
+            final long occurtime = System.currentTimeMillis();
+            final Question spq2 = new Question();
+            final Question spq2mat = spq2.MakeQuestionSP1();
+            solvequestion(occurtime, spq2mat);
+            setState(State.notMyTURN);
+        }
     }
 
     private void setupBT() {
@@ -804,26 +807,79 @@ public class MainActivity extends AppCompatActivity {
         setState(State.Disconnected);
         soundPool.play(sound_disconnected, 1.0f, 1.0f, 0, 0, 1);
     }
-    public int calculatemoves(int answer, long time){
-        return((int)((Math.log(answer)/time)*2000)+1);
+    public int calculatemoves(String id, int answer, long time){
+        switch(id) {
+            case "nQ":
+                return ((int) ((Math.log(answer) / time) * 2000) + 1);
+            case "SPQ1":
+                return 2;
+            case "SPQ2":
+                return 4;
+            default:
+                return 0;
+        }
     }
 }
 class Question{
+    public String qid;
    public int x;
    public int y;
+   public int accepttime;
    public String qs;
+   public String qtitle;
    public int answer;
    public Question MakeQuestion(){
        Random rnd = new Random();
        Question q = new Question();
-       q.x = rnd.nextInt(90) + 10;
-       q.y = rnd.nextInt(90) + 10;
+       q.qid = "nQ";
+       q.x = rnd.nextInt(23) + 10;
+       q.y = rnd.nextInt (23) + 10;
        q.qs = String.format("%d × %d = ", q.x, q.y);
+       q.qtitle = "問題: ";
        q.answer = q.x * q.y;
+       q.accepttime = 20000;
        return q;
    }
+   public Question MakeQuestionSP1(){
+       Random rnd = new Random();
+       Question q = new Question();
+       q.qid = "SPQ1";
+       q.x = rnd.nextInt(9) + 1;
+       q.y = rnd.nextInt(9) + 1;
+       q.qs = String.format("%d × %d = ", q.x, q.y);
+       q.qtitle = "特別問題(3秒で解こう!): ";
+       q.answer = q.x * q.y;
+       q.accepttime = 3000;
+       return q;
+   }
+    public Question MakeQuestionSP2(){
+        Random rnd = new Random();
+        Question q = new Question();
+        q.qid = "SPQ2";
+        q.x = rnd.nextInt(49) + 51;
+        q.y = rnd.nextInt(49) + 51;
+        q.qs = String.format("%d × %d = ", q.x, q.y);
+        q.qtitle = "特別問題(10秒で解こう!): ";
+        q.answer = q.x * q.y;
+        q.accepttime = 10000;
+        return q;
+    }
+
 }
 class Sugoroku{
-    public static final int n_goal = 10;
+    public static final int n_goal = 12;
     public static int totalmoves = 0;
+}
+class Event{
+    public static int Eventchecker(int m){
+        if(m == 5){
+            return 1;
+        }
+        else if(m == 8){
+            return 2;
+        }
+        else{
+            return 0;
+        }
+    }
 }

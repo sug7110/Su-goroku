@@ -13,7 +13,7 @@
     <string name="menu_disconnect_title">Disconnect</string>
     <string name="menu_server_start_title">Accept Connection</string>
     <string name="menu_server_stop_title">Stop Listening</string>
-    <string name="menu_clear_title">Clear Conversation</string>
+    <string name="menu_clear_title">Clear Log</string>
     <string name="menu_about_title">About</string>
 
     <string name="menu_scan_start_title">Scan</string>
