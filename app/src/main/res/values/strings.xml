@@ -1,12 +1,12 @@
 <resources>
-    <string name="app_name">BTChat</string>
+    <string name="app_name">数ゴロク</string>
 
     <string name="conn_status_text_disconnected">Disconnected</string>
     <string name="conn_status_text_connecting_to">Connecting to %s</string>
-    <string name="conn_status_text_connected_to">Connected to %s</string>
+    <string name="conn_status_text_connected_to">Connected to %s. Push SOLVE! to start.</string>
     <string name="conn_status_text_waiting_for_connection">Listening for incoming connection</string>
-
-    <string name="send_button_label">Send</string>
+    <string name="conn_status_text_finished">ゲーム終了 Push SOLVE! to restart.</string>
+    <string name="solve_button_label">SOLVE!</string>
     <string name="input_text_hint">Message</string>
 
     <string name="menu_connect_title">Connect</string>
@@ -21,8 +21,8 @@
 
     <string name="format_dev_name">%1$s %2$s</string>
 
-    <string name="about_dialog_title">About BTChat</string>
-    <string name="about_dialog_content">Simple Bluetooth chat application</string>
+    <string name="about_dialog_title">About　数ゴロク</string>
+    <string name="about_dialog_content">Bluetoothを用いたスゴロク対戦型計算ゲームです。</string>
     <string name="alert_connection_confirmation">Do you really want to connect to this device?</string>
 
     <string name="scan_status_stopped">Select a device you want to connect to</string>

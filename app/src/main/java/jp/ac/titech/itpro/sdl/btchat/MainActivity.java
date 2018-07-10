@@ -1,6 +1,7 @@
 package jp.ac.titech.itpro.sdl.btchat;
 
 import android.app.Activity;
+import android.content.DialogInterface;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothServerSocket;
@@ -33,7 +34,7 @@ import android.widget.ListView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
-
+import java.util.Random;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
@@ -70,7 +71,10 @@ public class MainActivity extends AppCompatActivity {
         Disconnected,
         Connecting,
         Connected,
-        Waiting
+        Waiting,
+        MyTURN,
+        notMyTURN,
+        Finish
     }
 
     private State state = State.Initializing;
@@ -102,7 +106,6 @@ public class MainActivity extends AppCompatActivity {
 
         statusText = findViewById(R.id.conn_status_text);
         connectionProgress = findViewById(R.id.connection_progress);
-        inputText = findViewById(R.id.input_text);
         sendButton = findViewById(R.id.send_button);
         chatLogView = findViewById(R.id.chat_log_view);
         chatLogAdapter = new ArrayAdapter<ChatMessage>(this, 0, chatLog) {
@@ -273,24 +276,99 @@ public class MainActivity extends AppCompatActivity {
                 setState(State.Disconnected);
         }
     }
+// SOLVEボタンを押した時の挙動
+    public void onClickSolveButton(View v) {
+        final long clicktime = System.currentTimeMillis();
+        Log.d(TAG, "onClickSolveButton");
+        final EditText editView = new EditText(MainActivity.this);
+        final Question q = new Question();
+        final Question qmat = q.MakeQuestion();
+        new AlertDialog.Builder(MainActivity.this)
+                .setIcon(android.R.drawable.ic_dialog_info)
+                .setTitle("問題: " + qmat.qs + " ?")
+                .setView(editView)
+                .setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int whichButton) {
+                        long solvetime = System.currentTimeMillis();
+                        long duration = solvetime-clicktime;
+                        int moves = 0;
+                        boolean correct;
+                        boolean goal = false;
+                        int answer = 0;
+                        if(editView.getText().toString().length() != 0 ){
+                            try{
+                                answer = Integer.parseInt(editView.getText().toString());
+                            }
+                            catch(NumberFormatException e){
+                                answer = 0;
+                            }
+                        }
+                        if (answer == qmat.answer) {
+                            correct = true;
+                            moves = calculatemoves(answer, duration);
+                            Sugoroku.totalmoves += moves;
+                            if (Sugoroku.totalmoves >= Sugoroku.n_goal){
+                                goal = true;
+                                Toast.makeText(MainActivity.this,
+                                        "ゴール!おめでとう!",
+                                        Toast.LENGTH_LONG).show();
+                            }
+                            else{
+                                Toast.makeText(MainActivity.this,
+                                        "正解!",
+                                        Toast.LENGTH_LONG).show();
 
-    public void onClickSendButton(View v) {
-        Log.d(TAG, "onClickSendButton");
-        if (commThread != null) {
-            String content = inputText.getText().toString().trim();
-            if (content.length() == 0) {
-                Toast.makeText(this, R.string.toast_empty_message, Toast.LENGTH_SHORT).show();
-                return;
-            }
-            message_seq++;
-            long time = System.currentTimeMillis();
-            ChatMessage message = new ChatMessage(message_seq, time, content, devName);
-            commThread.send(message);
-            chatLogAdapter.add(message);
-            chatLogAdapter.notifyDataSetChanged();
-            chatLogView.smoothScrollToPosition(chatLog.size());
-            inputText.getEditableText().clear();
-        }
+                            }
+                        } else {
+                            correct = false;
+                            Toast.makeText(MainActivity.this,
+                                    "不正解!",
+                                    Toast.LENGTH_LONG).show();
+                    }
+                        String content;
+                        if (!correct){
+                            content = String.format("%s - 不正解!" + "\n" +
+                                            "%s %d", devName.substring(0,4),qmat.qs, qmat.answer);
+                        } else {
+                            content = String.format("%s - 正解!" + "\n" +
+                                            "%s %d(in %2ds), %dマス進みます",
+                                    devName.substring(0,4), qmat.qs, qmat.answer, duration/1000, moves);
+                        }
+                        ChatMessage message = new ChatMessage(message_seq, solvetime, content, devName);
+                        commThread.send(message);
+                        chatLogAdapter.add(message);
+                        chatLogAdapter.notifyDataSetChanged();
+                        chatLogView.smoothScrollToPosition(chatLog.size());
+                        setState(State.notMyTURN);
+                        if(goal){
+                            content = String.format("%sがゴールしました", devName.substring(0,4));
+                            message = new ChatMessage(message_seq, solvetime, content, devName);
+                            commThread.send(message);
+                            chatLogAdapter.add(message);
+                            chatLogAdapter.notifyDataSetChanged();
+                            chatLogView.smoothScrollToPosition(chatLog.size());
+                            setState(State.Finish);
+                        }
+                    }
+                })
+                .setNegativeButton("キャンセル", new DialogInterface.OnClickListener() {
+                    public void onClick(DialogInterface dialog, int whichButton) {
+                        long solvetime = System.currentTimeMillis();
+                        Toast.makeText(MainActivity.this,
+                                "Never give up",
+                                Toast.LENGTH_LONG).show();
+                        String content = String.format("%s - 不正解!" + "\n" +
+                                                "%s %d", devName.substring(0,4),qmat.qs, qmat.answer);
+                        ChatMessage message = new ChatMessage(message_seq, solvetime, content, devName);
+                        commThread.send(message);
+                        chatLogAdapter.add(message);
+                        chatLogAdapter.notifyDataSetChanged();
+                        chatLogView.smoothScrollToPosition(chatLog.size());
+                        setState(State.notMyTURN);
+                    }
+                })
+                .show();
+
     }
 
     private void setupBT() {
@@ -646,6 +724,13 @@ public class MainActivity extends AppCompatActivity {
                 break;
             case MESG_RECEIVED:
                 activity.showMessage((ChatMessage) msg.obj);
+                String message = toString().valueOf(msg.obj);
+                if(message.contains("ゴール")){
+                    activity.setState(State.Finish);
+                }
+                else{
+                    activity.setState(State.MyTURN);
+                }
                 break;
             }
         }
@@ -659,33 +744,47 @@ public class MainActivity extends AppCompatActivity {
 
     private void setState(State state, String arg) {
         this.state = state;
+        int rest = Sugoroku.n_goal-Sugoroku.totalmoves;
+        String myturntext = String.format("あなたのターンです。ゴールまであと%dマスです！",rest);
+        String notmyturntext = String.format("相手のターンです。ゴールまであと%dマスです！",rest);
         switch (state) {
         case Initializing:
             statusText.setText(R.string.conn_status_text_disconnected);
-            inputText.setEnabled(false);
             sendButton.setEnabled(false);
             break;
         case Disconnected:
+            Sugoroku.totalmoves = 0;
             statusText.setText(R.string.conn_status_text_disconnected);
-            inputText.setEnabled(false);
             sendButton.setEnabled(false);
             break;
         case Connecting:
             statusText.setText(getString(R.string.conn_status_text_connecting_to, arg));
-            inputText.setEnabled(false);
             sendButton.setEnabled(false);
             break;
         case Connected:
             statusText.setText(getString(R.string.conn_status_text_connected_to, arg));
-            inputText.setEnabled(true);
             sendButton.setEnabled(true);
             soundPool.play(sound_connected, 1.0f, 1.0f, 0, 0, 1);
             break;
         case Waiting:
             statusText.setText(R.string.conn_status_text_waiting_for_connection);
-            inputText.setEnabled(false);
             sendButton.setEnabled(false);
             break;
+        // ゲーム中の表示列
+        // xmlに文字列を登録するとうまいこといってくれないので上で文字列を直接定義
+        case MyTURN:
+            statusText.setText(myturntext);
+            sendButton.setEnabled(true);
+            break;
+        case notMyTURN:
+            statusText.setText(notmyturntext);
+            sendButton.setEnabled(false);
+            break;
+        case Finish:
+            Sugoroku.totalmoves = 0;
+            statusText.setText(R.string.conn_status_text_finished);
+            sendButton.setEnabled(true);
+
         }
         invalidateOptionsMenu();
     }
@@ -705,4 +804,26 @@ public class MainActivity extends AppCompatActivity {
         setState(State.Disconnected);
         soundPool.play(sound_disconnected, 1.0f, 1.0f, 0, 0, 1);
     }
+    public int calculatemoves(int answer, long time){
+        return((int)((Math.log(answer)/time)*2000)+1);
+    }
+}
+class Question{
+   public int x;
+   public int y;
+   public String qs;
+   public int answer;
+   public Question MakeQuestion(){
+       Random rnd = new Random();
+       Question q = new Question();
+       q.x = rnd.nextInt(90) + 10;
+       q.y = rnd.nextInt(90) + 10;
+       q.qs = String.format("%d × %d = ", q.x, q.y);
+       q.answer = q.x * q.y;
+       return q;
+   }
+}
+class Sugoroku{
+    public static final int n_goal = 10;
+    public static int totalmoves = 0;
 }
